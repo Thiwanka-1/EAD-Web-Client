@@ -13,6 +13,10 @@ import DashboardLayout from "./layouts/DashboardLayout.jsx";
 import Users from "./pages/Users.jsx";
 import Owners from "./pages/Owners.jsx";
 import Stations from "./pages/Stations.jsx";
+import Bookings from "./pages/Bookings.jsx";
+import OperatorDashboard from "./pages/OperatorDashboard.jsx";
+import OperatorLayout from "./layouts/OperatorLayout.jsx";
+import OperatorProfile from "./pages/OperatorProfile.jsx";
 
 export default function App() {
   return (
@@ -65,6 +69,49 @@ export default function App() {
         }
       />
 
+      <Route
+        path="/stations"
+        element={
+          <RequireAuth roles={["Backoffice"]}>
+            <DashboardLayout>
+              <Stations />
+            </DashboardLayout>
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/bookings"
+        element={
+          <RequireAuth roles={["Backoffice"]}>
+            <DashboardLayout>
+              <Bookings />
+            </DashboardLayout>
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/op"
+        element={
+          <RequireAuth roles={["Operator"]}>
+            <OperatorLayout>
+              <OperatorDashboard />
+            </OperatorLayout>
+          </RequireAuth>
+        }
+      />
+
+       <Route
+        path="/op/profile"
+        element={
+          <RequireAuth roles={["Operator"]}>
+            <OperatorLayout>
+              <OperatorProfile />
+            </OperatorLayout>
+          </RequireAuth>
+        }
+      />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/login" />} />
