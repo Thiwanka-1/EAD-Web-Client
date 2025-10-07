@@ -1,4 +1,5 @@
-import React, { useContext } from "react";
+// src/layouts/DashboardLayout.jsx
+import React, { useContext, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext.jsx";
 import {
@@ -7,12 +8,13 @@ import {
   UsersIcon,
   BuildingOffice2Icon,
   ClipboardDocumentListIcon,
-  ArrowRightOnRectangleIcon,
 } from "@heroicons/react/24/outline";
+import { FaBars, FaSignOutAlt } from "react-icons/fa";
 
 export default function DashboardLayout({ children }) {
   const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -27,53 +29,78 @@ export default function DashboardLayout({ children }) {
     { path: "/bookings", label: "Bookings", icon: ClipboardDocumentListIcon },
   ];
 
+  const navLink =
+    "flex items-center gap-3 px-3 py-2 rounded hover:bg-blue-50 text-gray-700";
+  const navActive = "bg-blue-600 text-white hover:bg-blue-600";
+
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
-      <aside className="w-64 bg-white shadow-md flex flex-col">
-        <div className="p-4 font-bold text-xl text-blue-600 border-b">
-          EVCharge Admin
+      <aside
+        className={`fixed z-40 inset-y-0 left-0 w-64 bg-white shadow-lg transform transition-transform md:translate-x-0 ${
+          open ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="h-16 border-b px-4 flex items-center justify-between">
+          <div className="font-bold text-lg">EVCharge Backoffice</div>
+          <button
+            className="md:hidden text-gray-500"
+            onClick={() => setOpen(false)}
+            aria-label="Close menu"
+          >
+            ✕
+          </button>
         </div>
-        <nav className="flex-1 p-4 space-y-2">
+
+        <nav className="p-3 space-y-1">
           {navItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
+              end={item.path === "/dashboard"}
               className={({ isActive }) =>
-                `flex items-center px-3 py-2 rounded-lg transition ${
-                  isActive
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-700 hover:bg-gray-100"
-                }`
+                `${navLink} ${isActive ? navActive : ""}`
               }
+              onClick={() => setOpen(false)}
             >
-              <item.icon className="w-5 h-5 mr-2" />
-              {item.label}
+              <item.icon className="w-5 h-5" />
+              <span>{item.label}</span>
             </NavLink>
           ))}
         </nav>
-        <button
-          onClick={handleLogout}
-          className="flex items-center px-3 py-2 m-4 rounded-lg bg-red-600 text-white hover:bg-red-700 transition"
-        >
-          <ArrowRightOnRectangleIcon className="w-5 h-5 mr-2" />
-          Logout
-        </button>
+
+        {/* User + Logout footer */}
+        <div className="absolute bottom-0 w-full p-3 border-t">
+          <div className="px-3 py-2 text-sm text-gray-600">
+            <div className="font-semibold">{user?.username}</div>
+            <div className="text-xs">{user?.role}</div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="w-full mt-2 flex items-center justify-center gap-2 px-3 py-2 rounded bg-red-600 text-white hover:bg-red-700"
+          >
+            <FaSignOutAlt /> Logout
+          </button>
+        </div>
       </aside>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col">
-        {/* Topbar */}
-        <header className="h-14 bg-white shadow-sm flex items-center justify-between px-6">
-          <h1 className="text-lg font-semibold">Backoffice</h1>
-          <div className="text-sm text-gray-600">
-            Logged in as <span className="font-bold">{user?.username}</span> (
-            {user?.role})
+      {/* Main */}
+      <div className="flex-1 md:ml-64">
+        <header className="h-16 bg-white shadow flex items-center justify-between px-4">
+          <button
+            className="md:hidden text-gray-700"
+            onClick={() => setOpen(true)}
+            aria-label="Open menu"
+          >
+            <FaBars />
+          </button>
+          <div className="font-semibold">
+            Backoffice — Welcome, {user?.username}
           </div>
+          <div />
         </header>
 
-        {/* Page Content */}
-        <main className="flex-1 p-6 overflow-y-auto">{children}</main>
+        <main className="p-4 sm:p-6">{children}</main>
       </div>
     </div>
   );

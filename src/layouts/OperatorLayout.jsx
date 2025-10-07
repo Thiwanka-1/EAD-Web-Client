@@ -83,7 +83,7 @@ export default function OperatorLayout({ children }) {
           >
             <FaBars />
           </button>
-          <div className="font-semibold">Welcome, {user?.username}</div>
+          <div className="font-semibold">Welcome, Operator {user?.username}</div>
           <div />
         </header>
 

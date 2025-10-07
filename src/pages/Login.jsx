@@ -147,7 +147,7 @@ export default function Login() {
         // Replace with your own image in /public and use: bg-[url('/login-side.jpg')]
         style={{
           backgroundImage:
-            "url('https://images.unsplash.com/photo-1610890716171-6b1bb98c1e5b?q=80&w=1600&auto=format&fit=crop')",
+            "url('https://www.freepik.com/free-vector/electric-car-background_3515205.htm#fromView=search&page=1&position=28&uuid=de04df9e-e09f-46a3-9495-68767c73d4a1&query=ev+')",
         }}
       />
     </div>

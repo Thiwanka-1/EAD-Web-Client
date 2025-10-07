@@ -39,7 +39,7 @@ export default function App() {
       <Route
   path="/users"
   element={
-    <RequireAuth roles={["Backoffice", "Operator"]}>
+    <RequireAuth roles={["Backoffice"]}>
       <DashboardLayout>
         <Users />
       </DashboardLayout>
