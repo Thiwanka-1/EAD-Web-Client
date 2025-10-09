@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://10.35.224.93:4000/api",
+  baseURL: "https://evcharge-api-kh-cvgdhcfvazekever.eastasia-01.azurewebsites.net/api",
 });
 
 // Attach JWT token to all requests
