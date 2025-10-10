@@ -42,6 +42,10 @@ const SkeletonRow = () => (
   </tr>
 );
 
+// Username policy: 3–24 chars, letters, numbers, dot, underscore, hyphen
+const USERNAME_RX = /^[a-zA-Z0-9._-]{3,24}$/;
+const ROLES = new Set(["Backoffice", "Operator"]);
+
 /* --------------------------- Main --------------------------- */
 export default function Users() {
   const { user } = useContext(AuthContext);
@@ -57,13 +61,19 @@ export default function Users() {
   const [editingUser, setEditingUser] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const firstFieldRef = useRef(null);
+  const usernameRef = useRef(null);
+  const passwordRef = useRef(null);
+  const roleRef = useRef(null);
+
+  // Field errors
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // Search & sort
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState("username");
   const [sortDir, setSortDir] = useState("asc");
 
-  // Filters (optional nice touch)
+  // Filters
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
 
@@ -75,15 +85,13 @@ export default function Users() {
       const res = await api.get("/users");
       setUsers(res.data || []);
     } catch {
-      setError("Failed to fetch users");
+      setError("Failed to fetch users.");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  useEffect(() => { fetchUsers(); }, []);
 
   // Auto-focus first field when modal opens
   useEffect(() => {
@@ -92,17 +100,24 @@ export default function Users() {
     }
   }, [isModalOpen]);
 
-  // Handle form
-  const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+  // Form helpers
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((f) => ({ ...f, [name]: name === "username" ? value.trimStart() : value }));
+    // Clear error as they type
+    setFieldErrors((fe) => ({ ...fe, [name]: null }));
+  };
 
   const openModal = (u = null) => {
     if (u) {
       setEditingUser(u);
-      setForm({ username: u.username, password: "", role: u.role });
+      setForm({ username: u.username ?? "", password: "", role: u.role ?? "Operator" });
     } else {
       setEditingUser(null);
       setForm({ username: "", password: "", role: "Operator" });
     }
+    setFieldErrors({});
+    setError(null);
     setIsModalOpen(true);
   };
 
@@ -111,28 +126,86 @@ export default function Users() {
     setForm({ username: "", password: "", role: "Operator" });
     setEditingUser(null);
     setShowPassword(false);
+    setFieldErrors({});
+  };
+
+  // Client validation
+  const validateForm = () => {
+    const errs = {};
+    const username = form.username.trim();
+    const password = form.password; // don't trim passwords
+    const role = form.role;
+
+    if (!username) {
+      errs.username = "Username is required.";
+    } else if (!USERNAME_RX.test(username)) {
+      errs.username =
+        "3–24 chars; letters, numbers, dot (.), underscore (_), or hyphen (-) only.";
+    }
+
+    if (editingUser) {
+      if (password && password.length < 8) {
+        errs.password = "New password must be at least 8 characters.";
+      }
+    } else {
+      if (!password) errs.password = "Password is required.";
+      else if (password.length < 8) errs.password = "Password must be at least 8 characters.";
+    }
+
+    if (!ROLES.has(role)) {
+      errs.role = "Please choose a valid role.";
+    }
+
+    setFieldErrors(errs);
+
+    // Focus first invalid field
+    if (errs.username && usernameRef.current) usernameRef.current.focus();
+    else if (errs.password && passwordRef.current) passwordRef.current.focus();
+    else if (errs.role && roleRef.current) roleRef.current.focus();
+
+    return Object.keys(errs).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSaving(true);
     setError(null);
+    if (!validateForm()) return;
+
+    setSaving(true);
     try {
-      const payload = { username: form.username, role: form.role };
+      const payload = {
+        username: form.username.trim(),
+        role: form.role,
+      };
       if (form.password && form.password.trim() !== "") {
-        payload.passwordHash = form.password; // backend will hash
+        payload.passwordHash = form.password; // server hashes it
       }
+
       if (editingUser) {
         await api.put(`/users/${editingUser.id}`, payload);
-        setBanner("User updated successfully");
+        setBanner("User updated successfully.");
       } else {
         await api.post("/users", payload);
-        setBanner("User created successfully");
+        setBanner("User created successfully.");
       }
       closeModal();
       fetchUsers();
-    } catch {
-      setError("Error saving user");
+    } catch (err) {
+      // Try to surface meaningful server messages
+      const status = err?.response?.status;
+      const msgFromServer =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.response?.data?.errors?.join?.(", ");
+
+      if (status === 409) {
+        setFieldErrors((fe) => ({ ...fe, username: "Username already exists." }));
+        if (usernameRef.current) usernameRef.current.focus();
+      } else if (status === 400 || status === 422) {
+        setError(msgFromServer || "Validation failed on the server.");
+      } else {
+        setError("Error saving user.");
+      }
     } finally {
       setSaving(false);
       setTimeout(() => setBanner(null), 3000);
@@ -143,27 +216,25 @@ export default function Users() {
     if (!window.confirm("Delete this user?")) return;
     try {
       await api.delete(`/users/${id}`);
-      setBanner("User deleted");
+      setBanner("User deleted.");
       fetchUsers();
     } catch {
-      setError("Failed to delete user");
+      setError("Failed to delete user.");
     } finally {
       setTimeout(() => setBanner(null), 2500);
     }
   };
 
   const handleToggleActive = async (u) => {
-    const confirmMsg = u.isActive
-      ? "Deactivate this user?"
-      : "Activate this user?";
+    const confirmMsg = u.isActive ? "Deactivate this user?" : "Activate this user?";
     if (!window.confirm(confirmMsg)) return;
 
     try {
       await api.put(`/users/${u.id}`, { ...u, isActive: !u.isActive });
-      setBanner("Status updated");
+      setBanner("Status updated.");
       fetchUsers();
     } catch {
-      setError("Failed to update status");
+      setError("Failed to update status.");
     } finally {
       setTimeout(() => setBanner(null), 2500);
     }
@@ -233,6 +304,7 @@ export default function Users() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-3 py-2.5 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
+            aria-label="Search users"
           />
         </div>
         <select
@@ -399,10 +471,7 @@ export default function Users() {
           role="dialog"
           onKeyDown={(e) => e.key === "Escape" && closeModal()}
         >
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={closeModal}
-          />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeModal} />
           <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl ring-1 ring-gray-200 animate-[fadeIn_.15s_ease-out]">
             <button
               onClick={closeModal}
@@ -416,19 +485,29 @@ export default function Users() {
               {editingUser ? "Edit User" : "Add User"}
             </h2>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
               <div>
                 <label className="mb-1 block text-sm font-medium">Username</label>
                 <input
-                  ref={firstFieldRef}
+                  ref={(el) => {
+                    firstFieldRef.current = el;
+                    usernameRef.current = el;
+                  }}
                   type="text"
                   name="username"
                   value={form.username}
                   onChange={handleChange}
                   placeholder="e.g., operator01"
-                  required
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
+                  aria-invalid={!!fieldErrors.username}
+                  className={`w-full rounded-lg border px-3 py-2.5 shadow-sm focus:ring-2 ${
+                    fieldErrors.username
+                      ? "border-red-400 focus:ring-red-300"
+                      : "border-gray-300 focus:ring-blue-300"
+                  }`}
                 />
+                {fieldErrors.username && (
+                  <p className="mt-1 text-xs text-red-600">{fieldErrors.username}</p>
+                )}
               </div>
 
               <div>
@@ -437,12 +516,18 @@ export default function Users() {
                 </label>
                 <div className="relative">
                   <input
+                    ref={passwordRef}
                     type={showPassword ? "text" : "password"}
                     name="password"
                     value={form.password}
                     onChange={handleChange}
                     placeholder={editingUser ? "Leave blank to keep current" : "••••••••"}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2.5 pr-10 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
+                    aria-invalid={!!fieldErrors.password}
+                    className={`w-full rounded-lg border px-3 py-2.5 pr-10 shadow-sm focus:ring-2 ${
+                      fieldErrors.password
+                        ? "border-red-400 focus:ring-red-300"
+                        : "border-gray-300 focus:ring-blue-300"
+                    }`}
                   />
                   <button
                     type="button"
@@ -453,24 +538,37 @@ export default function Users() {
                     {showPassword ? <FaEyeSlash /> : <FaEye />}
                   </button>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  {editingUser
-                    ? "Leave empty to keep the existing password."
-                    : "Minimum 8 characters recommended."}
-                </p>
+                {fieldErrors.password ? (
+                  <p className="mt-1 text-xs text-red-600">{fieldErrors.password}</p>
+                ) : (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {editingUser
+                      ? "Leave empty to keep the existing password."
+                      : "Minimum 8 characters."}
+                  </p>
+                )}
               </div>
 
               <div>
                 <label className="mb-1 block text-sm font-medium">Role</label>
                 <select
+                  ref={roleRef}
                   name="role"
                   value={form.role}
                   onChange={handleChange}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
+                  aria-invalid={!!fieldErrors.role}
+                  className={`w-full rounded-lg border px-3 py-2.5 shadow-sm focus:ring-2 ${
+                    fieldErrors.role
+                      ? "border-red-400 focus:ring-red-300"
+                      : "border-gray-300 focus:ring-blue-300"
+                  }`}
                 >
                   <option value="Backoffice">Backoffice</option>
                   <option value="Operator">Operator</option>
                 </select>
+                {fieldErrors.role && (
+                  <p className="mt-1 text-xs text-red-600">{fieldErrors.role}</p>
+                )}
               </div>
 
               <div className="mt-5 flex items-center justify-end gap-2">
